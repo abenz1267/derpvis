@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/pborman/getopt/v2"
 )
@@ -20,8 +21,8 @@ var (
 )
 
 var (
-	folderFile string
-	folders    []string
+	repolist string
+	repos    []string
 )
 
 func init() {
@@ -51,27 +52,33 @@ func main() {
 		return
 	}
 
-	updateRepos()
+	var wg sync.WaitGroup
+	wg.Add(len(repos))
+
+	for _, v := range repos {
+		go updateRepo(v, &wg)
+	}
+
+	wg.Wait()
 }
 
-func updateRepos() {
+func updateRepo(r string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	cmd := exec.Command("git", "pull")
-
-	for _, v := range folders {
-		cmd.Dir = v
-		out, err := cmd.Output()
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Printf("%s: %s", v, string(out))
+	cmd.Dir = r
+	out, err := cmd.Output()
+	if err != nil {
+		panic(err)
 	}
+
+	fmt.Printf("%s: %s", r, string(out))
 }
 
 func removeFolder() {
-	for k := range folders {
+	for k := range repos {
 		if k+1 == remove {
-			folders = removeIndex(folders, k)
+			repos = removeIndex(repos, k)
 		}
 	}
 
@@ -83,18 +90,18 @@ func removeIndex(s []string, index int) []string {
 }
 
 func listFolders() {
-	for k, v := range folders {
+	for k, v := range repos {
 		fmt.Printf("%d: %s\n", k+1, v)
 	}
 }
 
 func parseFolders() {
-	b, err := ioutil.ReadFile(folderFile)
+	b, err := ioutil.ReadFile(repolist)
 	if err != nil {
 		panic(err)
 	}
 
-	err = json.Unmarshal(b, &folders)
+	err = json.Unmarshal(b, &repos)
 	if err != nil {
 		panic(err)
 	}
@@ -111,19 +118,19 @@ func addFolder(c bool) {
 			return
 		}
 
-		folders = append(folders, wd)
+		repos = append(repos, wd)
 
 		writeFolders()
 	}
 
 	if add != "" {
-		folders = append(folders, add)
+		repos = append(repos, add)
 		writeFolders()
 	}
 }
 
 func folderExists(f string) bool {
-	for _, v := range folders {
+	for _, v := range repos {
 		if v == f {
 			println("Folder already exists!")
 			return true
@@ -134,14 +141,14 @@ func folderExists(f string) bool {
 }
 
 func writeFolders() {
-	sort.Strings(folders)
+	sort.Strings(repos)
 
-	b, err := json.Marshal(folders)
+	b, err := json.Marshal(repos)
 	if err != nil {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(folderFile, b, 0700)
+	err = ioutil.WriteFile(repolist, b, 0700)
 	if err != nil {
 		panic(err)
 	}
@@ -153,8 +160,8 @@ func createDatabase() {
 		panic(err)
 	}
 
-	folderFile = filepath.Join(cfgDir, "derpvis", "folders.json")
-	if _, err = os.Stat(folderFile); !os.IsNotExist(err) {
+	repolist = filepath.Join(cfgDir, "derpvis", "folders.json")
+	if _, err = os.Stat(repolist); !os.IsNotExist(err) {
 		return
 	}
 
@@ -163,7 +170,7 @@ func createDatabase() {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(folderFile, []byte("[]"), 0700)
+	err = ioutil.WriteFile(repolist, []byte("[]"), 0700)
 	if err != nil {
 		panic(err)
 	}
