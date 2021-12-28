@@ -56,15 +56,16 @@ func main() {
 	wg.Add(len(repos))
 
 	for _, v := range repos {
-		go updateRepo(v, &wg)
+		go func(repo string) {
+			defer wg.Done()
+			updateRepo(repo)
+		}(v)
 	}
 
 	wg.Wait()
 }
 
-func updateRepo(r string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func updateRepo(r string) {
 	cmd := exec.Command("git", "pull")
 	cmd.Dir = r
 	out, err := cmd.Output()
