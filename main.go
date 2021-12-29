@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"io/fs"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,18 +15,19 @@ import (
 	"github.com/pborman/getopt/v2"
 )
 
+//nolint
 var (
-	add     string
-	remove  int
-	current bool
-	list    bool
-)
-
-var (
+	add      string
+	remove   int
+	current  bool
+	list     bool
 	repolist string
 	repos    []string
+
+	PERMISSION_READ_WRITE = 600
 )
 
+//nolint
 func init() {
 	getopt.FlagLong(&add, "add", 'a', "", "folder to add to monitoring")
 	getopt.FlagLong(&remove, "remove", 'r', "folder to remove from monitoring")
@@ -41,20 +43,24 @@ func main() {
 
 	if add != "" || current {
 		addFolder(current)
+
 		return
 	}
 
 	if list {
 		listFolders()
+
 		return
 	}
 
 	if remove != 0 {
 		removeFolder()
+
 		return
 	}
 
 	var wg sync.WaitGroup
+
 	wg.Add(len(repos))
 
 	for _, v := range repos {
@@ -80,20 +86,22 @@ func syncEnvFolders() {
 	writeFolders()
 }
 
-func updateRepo(r string) {
-	if _, err := os.Stat(r); os.IsNotExist(err) {
-		fmt.Printf("Folder missing: %s\n", r)
+func updateRepo(repo string) {
+	if _, err := os.Stat(repo); os.IsNotExist(err) {
+		log.Printf("Folder missing: %s\n", repo)
+
 		return
 	}
 
 	cmd := exec.Command("git", "pull")
-	cmd.Dir = r
+	cmd.Dir = repo
+
 	out, err := cmd.Output()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("%s: %s", r, string(out))
+	log.Printf("%s: %s", repo, string(out))
 }
 
 func removeFolder() {
@@ -112,7 +120,7 @@ func removeIndex(s []string, index int) []string {
 
 func listFolders() {
 	for k, v := range repos {
-		fmt.Printf("%d: %s\n", k+1, v)
+		log.Printf("%d: %s\n", k+1, v)
 	}
 }
 
@@ -130,31 +138,32 @@ func parseFolders() {
 
 func addFolder(c bool) {
 	if c {
-		wd, err := os.Getwd()
+		workingDir, err := os.Getwd()
 		if err != nil {
 			panic(err)
 		}
 
-		if folderExists(wd, true) {
+		if folderExists(workingDir, true) {
 			return
 		}
 
-		repos = append(repos, wd)
+		repos = append(repos, workingDir)
 
 		writeFolders()
 	}
 
 	if add != "" {
 		repos = append(repos, add)
+
 		writeFolders()
 	}
 }
 
-func folderExists(f string, print bool) bool {
+func folderExists(f string, printMsg bool) bool {
 	for _, v := range repos {
 		if v == f {
-			if print {
-				println("Folder already exists!")
+			if printMsg {
+				log.Println("Folder already exists!")
 			}
 
 			return true
@@ -172,7 +181,7 @@ func writeFolders() {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(repolist, b, 0700)
+	err = ioutil.WriteFile(repolist, b, fs.FileMode(PERMISSION_READ_WRITE))
 	if err != nil {
 		panic(err)
 	}
@@ -189,12 +198,12 @@ func createDatabase() {
 		return
 	}
 
-	err = os.Mkdir(filepath.Join(cfgDir, "derpvis"), 0700)
+	err = os.Mkdir(filepath.Join(cfgDir, "derpvis"), fs.FileMode(PERMISSION_READ_WRITE))
 	if err != nil {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(repolist, []byte("[]"), 0700)
+	err = ioutil.WriteFile(repolist, []byte("[]"), fs.FileMode(PERMISSION_READ_WRITE))
 	if err != nil {
 		panic(err)
 	}
