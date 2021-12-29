@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/pborman/getopt/v2"
@@ -35,6 +36,7 @@ func init() {
 func main() {
 	createDatabase()
 	parseFolders()
+	syncEnvFolders()
 	getopt.Parse()
 
 	if add != "" || current {
@@ -65,7 +67,25 @@ func main() {
 	wg.Wait()
 }
 
+func syncEnvFolders() {
+	envVar := os.Getenv("DERPVIS_FOLDERS")
+	folders := strings.Split(envVar, ":")
+
+	for _, v := range folders {
+		if !folderExists(v, false) {
+			repos = append(repos, v)
+		}
+	}
+
+	writeFolders()
+}
+
 func updateRepo(r string) {
+	if _, err := os.Stat(r); os.IsNotExist(err) {
+		fmt.Printf("Folder missing: %s\n", r)
+		return
+	}
+
 	cmd := exec.Command("git", "pull")
 	cmd.Dir = r
 	out, err := cmd.Output()
@@ -115,7 +135,7 @@ func addFolder(c bool) {
 			panic(err)
 		}
 
-		if folderExists(wd) {
+		if folderExists(wd, true) {
 			return
 		}
 
@@ -130,10 +150,13 @@ func addFolder(c bool) {
 	}
 }
 
-func folderExists(f string) bool {
+func folderExists(f string, print bool) bool {
 	for _, v := range repos {
 		if v == f {
-			println("Folder already exists!")
+			if print {
+				println("Folder already exists!")
+			}
+
 			return true
 		}
 	}
