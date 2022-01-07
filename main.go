@@ -24,7 +24,7 @@ var (
 	repolist string
 	repos    []string
 
-	PERMISSION_READ_WRITE = 600
+	PERMISSION_READ_WRITE = 0777
 )
 
 //nolint
