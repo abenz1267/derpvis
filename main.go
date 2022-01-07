@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -120,7 +121,8 @@ func removeIndex(s []string, index int) []string {
 
 func listFolders() {
 	for k, v := range repos {
-		log.Printf("%d: %s\n", k+1, v)
+		//nolint
+		fmt.Printf("%d: %s\n", k+1, v)
 	}
 }
 
