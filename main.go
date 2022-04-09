@@ -79,7 +79,12 @@ func main() {
 }
 
 func syncEnvFolders() {
-	envVar := os.Getenv("DERPVIS_FOLDERS")
+	envVar, exists := os.LookupEnv("DERPVIS_FOLDERS")
+
+	if !exists {
+		return
+	}
+
 	folders := strings.Split(envVar, ",")
 
 	for _, v := range folders {
