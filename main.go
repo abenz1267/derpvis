@@ -25,6 +25,7 @@ var (
 	repos    []Repo
 
 	PERMISSION_READ_WRITE = 0o777
+	GIT                   = "/usr/bin/git"
 )
 
 type Repo struct {
@@ -90,7 +91,7 @@ func syncEnvFolders() {
 	for _, v := range folders {
 		arrStr := strings.Split(v, "(")
 		if len(arrStr) != 2 {
-			log.Fatalf("Missing source repository for: %s", arrStr[0])
+			log.Fatalf("Missing source repository for: %s. Cloning...", arrStr[0])
 		}
 
 		folder := arrStr[0]
@@ -113,7 +114,7 @@ func updateRepo(repo Repo) {
 	if _, err := os.Stat(repo.Folder); os.IsNotExist(err) {
 		log.Printf("Folder missing: %s\n", repo.Folder)
 
-		cmd := exec.Command("git", "clone", repo.Source, repo.Folder)
+		cmd := exec.Command(GIT, "clone", repo.Source, repo.Folder)
 
 		err := cmd.Run()
 		if err != nil {
@@ -123,7 +124,7 @@ func updateRepo(repo Repo) {
 		return
 	}
 
-	cmd := exec.Command("git", "pull")
+	cmd := exec.Command(GIT, "pull")
 	cmd.Dir = repo.Folder
 
 	out, err := cmd.Output()
@@ -209,7 +210,7 @@ func getRemoteOrigin(dir string) string {
 		log.Fatalf("Folder doesn't exist: %s", dir)
 	}
 
-	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd := exec.Command(GIT, "config", "--get", "remote.origin.url")
 	cmd.Dir = dir
 
 	res, err := cmd.Output()
