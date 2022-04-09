@@ -6,6 +6,11 @@ You can setup folders and their respective git source with a `DERPVIS_FOLDERS` e
 
 Example environment variable: `export DERPVIS_FOLDERS=$HOME/.config/nvim(git@github.com:abenz1267/nvim.git),$HOME/.config/kitty(git@github.com:abenz1267/kitty.git)`
 
+Installation:
+```
+go install github.com/abenz1267/derpvis@latest
+```
+
 Commands:
 
 ```
