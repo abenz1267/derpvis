@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -23,10 +22,15 @@ var (
 	current  bool
 	list     bool
 	repolist string
-	repos    []string
+	repos    []Repo
 
-	PERMISSION_READ_WRITE = 0777
+	PERMISSION_READ_WRITE = 0o777
 )
+
+type Repo struct {
+	Folder string `json:"folder"`
+	Source string `json:"source"`
+}
 
 //nolint
 func init() {
@@ -43,7 +47,7 @@ func main() {
 	getopt.Parse()
 
 	if add != "" || current {
-		addFolder(current)
+		addFolder()
 
 		return
 	}
@@ -65,7 +69,7 @@ func main() {
 	wg.Add(len(repos))
 
 	for _, v := range repos {
-		go func(repo string) {
+		go func(repo Repo) {
 			defer wg.Done()
 			updateRepo(repo)
 		}(v)
@@ -76,33 +80,53 @@ func main() {
 
 func syncEnvFolders() {
 	envVar := os.Getenv("DERPVIS_FOLDERS")
-	folders := strings.Split(envVar, ":")
+	folders := strings.Split(envVar, ",")
 
 	for _, v := range folders {
-		if !folderExists(v, false) {
-			repos = append(repos, v)
+		arrStr := strings.Split(v, "(")
+		if len(arrStr) != 2 {
+			log.Fatalf("Missing source repository for: %s", arrStr[0])
+		}
+
+		folder := arrStr[0]
+		src := strings.Trim(arrStr[1], ")")
+
+		repo := Repo{
+			Folder: folder,
+			Source: src,
+		}
+
+		if !folderExists(repo, false) {
+			repos = append(repos, repo)
 		}
 	}
 
 	writeFolders()
 }
 
-func updateRepo(repo string) {
-	if _, err := os.Stat(repo); os.IsNotExist(err) {
-		log.Printf("Folder missing: %s\n", repo)
+func updateRepo(repo Repo) {
+	if _, err := os.Stat(repo.Folder); os.IsNotExist(err) {
+		log.Printf("Folder missing: %s\n", repo.Folder)
+
+		cmd := exec.Command("git", "clone", repo.Source, repo.Folder)
+
+		err := cmd.Run()
+		if err != nil {
+			panic(err)
+		}
 
 		return
 	}
 
 	cmd := exec.Command("git", "pull")
-	cmd.Dir = repo
+	cmd.Dir = repo.Folder
 
 	out, err := cmd.Output()
 	if err != nil {
 		panic(err)
 	}
 
-	log.Printf("%s: %s", repo, string(out))
+	log.Printf("%s: %s", repo.Folder, string(out))
 }
 
 func removeFolder() {
@@ -115,14 +139,14 @@ func removeFolder() {
 	writeFolders()
 }
 
-func removeIndex(s []string, index int) []string {
+func removeIndex(s []Repo, index int) []Repo {
 	return append(s[:index], s[index+1:]...)
 }
 
 func listFolders() {
 	for k, v := range repos {
 		//nolint
-		fmt.Printf("%d: %s\n", k+1, v)
+		fmt.Printf("%d: %s (%s)\n", k+1, v.Folder, v.Source)
 	}
 }
 
@@ -138,36 +162,67 @@ func parseFolders() {
 	}
 }
 
-func addFolder(c bool) {
-	if c {
+func addFolder() {
+	if current {
 		workingDir, err := os.Getwd()
 		if err != nil {
 			panic(err)
 		}
 
-		if folderExists(workingDir, true) {
+		repo := Repo{
+			Folder: workingDir,
+			Source: getRemoteOrigin(workingDir),
+		}
+
+		if folderExists(repo, true) {
 			return
 		}
 
-		repos = append(repos, workingDir)
+		repos = append(repos, repo)
 
 		writeFolders()
+
+		return
 	}
 
 	if add != "" {
-		repos = append(repos, add)
+		repo := Repo{
+			Folder: add,
+			Source: getRemoteOrigin(add),
+		}
+
+		repos = append(repos, repo)
 
 		writeFolders()
+
+		return
 	}
 }
 
-func folderExists(f string, printMsg bool) bool {
-	for _, v := range repos {
-		if v == f {
+func getRemoteOrigin(dir string) string {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		log.Fatalf("Folder doesn't exist: %s", dir)
+	}
+
+	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
+	cmd.Dir = dir
+
+	res, err := cmd.Output()
+	if err != nil {
+		panic(err)
+	}
+
+	return string(res)
+}
+
+func folderExists(repo Repo, printMsg bool) bool {
+	for i, v := range repos {
+		if v.Folder == repo.Folder {
 			if printMsg {
 				log.Println("Folder already exists!")
 			}
 
+			repos[i].Source = repo.Source
 			return true
 		}
 	}
@@ -176,8 +231,6 @@ func folderExists(f string, printMsg bool) bool {
 }
 
 func writeFolders() {
-	sort.Strings(repos)
-
 	b, err := json.Marshal(repos)
 	if err != nil {
 		panic(err)
