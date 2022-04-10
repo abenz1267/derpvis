@@ -7,11 +7,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/pborman/getopt/v2"
 )
 
@@ -25,7 +25,6 @@ var (
 	repos    []Repo
 
 	PERMISSION_READ_WRITE = 0o777
-	GIT                   = "/usr/bin/git"
 )
 
 type Repo struct {
@@ -114,9 +113,10 @@ func updateRepo(repo Repo) {
 	if _, err := os.Stat(repo.Folder); os.IsNotExist(err) {
 		log.Printf("Folder missing: %s\n", repo.Folder)
 
-		cmd := exec.Command(GIT, "clone", repo.Source, repo.Folder)
-
-		err := cmd.Run()
+		_, err := git.PlainClone(repo.Folder, false, &git.CloneOptions{
+			URL:      repo.Source,
+			Progress: os.Stdout,
+		})
 		if err != nil {
 			panic(err)
 		}
@@ -124,15 +124,33 @@ func updateRepo(repo Repo) {
 		return
 	}
 
-	cmd := exec.Command(GIT, "pull")
-	cmd.Dir = repo.Folder
-
-	out, err := cmd.Output()
+	r, err := git.PlainOpen(repo.Folder)
 	if err != nil {
 		panic(err)
 	}
 
-	log.Printf("%s: %s", repo.Folder, string(out))
+	w, err := r.Worktree()
+	if err != nil {
+		panic(err)
+	}
+
+	err = w.Pull(&git.PullOptions{RemoteName: "origin"})
+	if err != nil {
+		log.Printf("%s: %s", repo.Folder, err)
+		return
+	}
+
+	ref, err := r.Head()
+	if err != nil {
+		panic(err)
+	}
+
+	commit, err := r.CommitObject(ref.Hash())
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("%s: %s", repo.Folder, commit.Message)
 }
 
 func removeFolder() {
@@ -210,15 +228,17 @@ func getRemoteOrigin(dir string) string {
 		log.Fatalf("Folder doesn't exist: %s", dir)
 	}
 
-	cmd := exec.Command(GIT, "config", "--get", "remote.origin.url")
-	cmd.Dir = dir
-
-	res, err := cmd.Output()
+	r, err := git.PlainOpen(dir)
 	if err != nil {
 		panic(err)
 	}
 
-	return string(res)
+	remote, err := r.Remote("origin")
+	if err != nil {
+		panic(err)
+	}
+
+	return remote.Config().URLs[0]
 }
 
 func folderExists(repo Repo, printMsg bool) bool {
