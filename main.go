@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -15,7 +16,7 @@ import (
 	"github.com/pborman/getopt/v2"
 )
 
-//nolint
+// nolint
 var (
 	add      string
 	remove   int
@@ -32,7 +33,7 @@ type Repo struct {
 	Source string `json:"source"`
 }
 
-//nolint
+// nolint
 func init() {
 	getopt.FlagLong(&add, "add", 'a', "", "folder to add to monitoring")
 	getopt.FlagLong(&remove, "remove", 'r', "folder to remove from monitoring")
@@ -109,24 +110,36 @@ func syncEnvFolders() {
 	writeFolders()
 }
 
+func clone(repo Repo) {
+	_, err := git.PlainClone(repo.Folder, false, &git.CloneOptions{
+		URL:      repo.Source,
+		Progress: os.Stdout,
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func updateRepo(repo Repo) {
 	if _, err := os.Stat(repo.Folder); os.IsNotExist(err) {
 		log.Printf("Folder missing: %s\n", repo.Folder)
 
-		_, err := git.PlainClone(repo.Folder, false, &git.CloneOptions{
-			URL:      repo.Source,
-			Progress: os.Stdout,
-		})
-		if err != nil {
-			panic(err)
-		}
+		clone(repo)
 
 		return
 	}
 
 	r, err := git.PlainOpen(repo.Folder)
 	if err != nil {
-		panic(err)
+		if errors.Is(err, git.ErrRepositoryNotExists) {
+			os.RemoveAll(repo.Folder)
+
+			clone(repo)
+
+			return
+		} else {
+			panic(err)
+		}
 	}
 
 	w, err := r.Worktree()
