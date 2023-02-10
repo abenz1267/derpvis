@@ -22,10 +22,11 @@ var (
 	remove   int
 	current  bool
 	list     bool
+	push     bool
 	repolist string
 	repos    []Repo
 
-	PERMISSION_READ_WRITE = 0o777
+	PermissionReadWrite = 0o777
 )
 
 type Repo struct {
@@ -38,6 +39,7 @@ func init() {
 	getopt.FlagLong(&add, "add", 'a', "", "folder to add to monitoring")
 	getopt.FlagLong(&remove, "remove", 'r', "folder to remove from monitoring")
 	getopt.Flag(&current, 'c', "use current folder")
+	getopt.Flag(&push, 'p', "push changes")
 	getopt.Flag(&list, 'l', "list folders")
 }
 
@@ -65,6 +67,71 @@ func main() {
 		return
 	}
 
+	if push {
+		pushAll()
+
+		return
+	}
+
+	pullAll()
+}
+
+func pushAll() {
+	var wg sync.WaitGroup
+
+	wg.Add(len(repos))
+
+	for _, v := range repos {
+		go func(repo Repo) {
+			defer wg.Done()
+
+			r, err := git.PlainOpen(repo.Folder)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			w, err := r.Worktree()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			s, err := w.Status()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			if !s.IsClean() {
+				w.AddGlob(".")
+
+				var message string
+
+				for message == "" {
+					fmt.Printf("Commit message for %s: ", repo.Folder)
+					fmt.Scanln(&message)
+				}
+
+				_, err := w.Commit(message, &git.CommitOptions{})
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				err = r.Push(&git.PushOptions{})
+				if err != nil {
+					log.Println(err)
+					return
+				}
+			}
+		}(v)
+	}
+
+	wg.Wait()
+}
+
+func pullAll() {
 	var wg sync.WaitGroup
 
 	wg.Add(len(repos))
@@ -137,9 +204,9 @@ func updateRepo(repo Repo) {
 			clone(repo)
 
 			return
-		} else {
-			panic(err)
 		}
+
+		panic(err)
 	}
 
 	w, err := r.Worktree()
@@ -275,7 +342,7 @@ func writeFolders() {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(repolist, b, fs.FileMode(PERMISSION_READ_WRITE))
+	err = ioutil.WriteFile(repolist, b, fs.FileMode(PermissionReadWrite))
 	if err != nil {
 		panic(err)
 	}
@@ -292,12 +359,12 @@ func createDatabase() {
 		return
 	}
 
-	err = os.Mkdir(filepath.Join(cfgDir, "derpvis"), fs.FileMode(PERMISSION_READ_WRITE))
+	err = os.Mkdir(filepath.Join(cfgDir, "derpvis"), fs.FileMode(PermissionReadWrite))
 	if err != nil {
 		panic(err)
 	}
 
-	err = ioutil.WriteFile(repolist, []byte("[]"), fs.FileMode(PERMISSION_READ_WRITE))
+	err = ioutil.WriteFile(repolist, []byte("[]"), fs.FileMode(PermissionReadWrite))
 	if err != nil {
 		panic(err)
 	}

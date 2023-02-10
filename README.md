@@ -7,6 +7,7 @@ You can setup folders and their respective git source with a `DERPVIS_FOLDERS` e
 Example environment variable: `export DERPVIS_FOLDERS=$HOME/.config/nvim(git@github.com:abenz1267/nvim.git),$HOME/.config/kitty(git@github.com:abenz1267/kitty.git)`
 
 Installation:
+
 ```
 go install github.com/abenz1267/derpvis@latest
 ```
@@ -18,6 +19,7 @@ Commands:
 -a <folder> adds a given folder
 -l lists all folders
 -r <index> removes a given folder
+-p will attempt to push all changes in all repositories. Will ask for commit message individually.
 ```
 
 Folders will be kept in sync with the possible environment variable as the source of truth.
