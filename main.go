@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,9 +109,17 @@ func pushAll() {
 
 				var message string
 
-				for message == "" {
-					fmt.Printf("Commit message for %s: ", repo.Folder)
-					fmt.Scanln(&message)
+				fmt.Printf("Enter commit message for %s: ", repo.Folder)
+
+				scanner := bufio.NewScanner(os.Stdin)
+				for scanner.Scan() {
+					message = strings.TrimSpace(scanner.Text())
+
+					if message != "" {
+						break
+					}
+
+					fmt.Printf("Enter commit message for %s: ", repo.Folder)
 				}
 
 				_, err := w.Commit(message, &git.CommitOptions{})
