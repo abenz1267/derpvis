@@ -80,64 +80,58 @@ func main() {
 func pushAll() {
 	var wg sync.WaitGroup
 
-	wg.Add(len(repos))
+	for _, repo := range repos {
+		defer wg.Done()
 
-	for _, v := range repos {
-		go func(repo Repo) {
-			defer wg.Done()
+		r, err := git.PlainOpen(repo.Folder)
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-			r, err := git.PlainOpen(repo.Folder)
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		w, err := r.Worktree()
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-			w, err := r.Worktree()
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		s, err := w.Status()
+		if err != nil {
+			log.Println(err)
+			return
+		}
 
-			s, err := w.Status()
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		if !s.IsClean() {
+			w.AddGlob(".")
 
-			if !s.IsClean() {
-				w.AddGlob(".")
+			var message string
 
-				var message string
+			fmt.Printf("Enter commit message for %s: ", repo.Folder)
+
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				message = strings.TrimSpace(scanner.Text())
+
+				if message != "" {
+					break
+				}
 
 				fmt.Printf("Enter commit message for %s: ", repo.Folder)
-
-				scanner := bufio.NewScanner(os.Stdin)
-				for scanner.Scan() {
-					message = strings.TrimSpace(scanner.Text())
-
-					if message != "" {
-						break
-					}
-
-					fmt.Printf("Enter commit message for %s: ", repo.Folder)
-				}
-
-				_, err := w.Commit(message, &git.CommitOptions{})
-				if err != nil {
-					log.Println(err)
-					return
-				}
-
-				err = r.Push(&git.PushOptions{})
-				if err != nil {
-					log.Println(err)
-					return
-				}
 			}
-		}(v)
-	}
 
-	wg.Wait()
+			_, err := w.Commit(message, &git.CommitOptions{})
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			err = r.Push(&git.PushOptions{})
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		}
+	}
 }
 
 func pullAll() {
