@@ -78,11 +78,7 @@ func main() {
 }
 
 func pushAll() {
-	var wg sync.WaitGroup
-
 	for _, repo := range repos {
-		defer wg.Done()
-
 		r, err := git.PlainOpen(repo.Folder)
 		if err != nil {
 			log.Println(err)
